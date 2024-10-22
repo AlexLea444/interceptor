@@ -14,16 +14,35 @@ let playerY = canvasHeight - gridHeight - playerHeight; // player grid position
 
 let objects = []; // falling objects
 let score = 0;
-let gameSpeed = 2; // initial falling speed of objects
-let spawnRate = 1000; // how often objects are spawned in milliseconds
+let gameSpeed = 1; // slower initial falling speed
+let spawnRate = 1500; // slower initial spawn rate in milliseconds
 let gameOver = false;
+let gamePaused = false;
 
 const scoreDisplay = document.getElementById('score');
 
-// Handle player movement
 let moveRight = true;
 let moveLeft = false;
+let nextObject = { x: Math.random() * (canvasWidth - 20), y: -20 }; // Next falling object indicator
+
+// 30-second timer
+let gameDuration = 30000; // 30 seconds
+let timerDisplay = document.createElement('div');
+timerDisplay.style.fontSize = '18px';
+timerDisplay.style.color = 'white';
+document.body.appendChild(timerDisplay);
+let startTime = Date.now();
+let highScore = 0;
+let remainingTime = gameDuration; // to keep track of the paused time
+
+let objectInterval;
+let gameTimer;
+
+// Pause game with space bar
 document.addEventListener('keydown', (e) => {
+    if (e.key === ' ') {
+        togglePause();
+    }
     if (e.key === 'ArrowLeft') {
         moveLeft = true;
         moveRight = false;
@@ -34,14 +53,81 @@ document.addEventListener('keydown', (e) => {
     }
 });
 
+// Toggle Pause
+function togglePause() {
+    gamePaused = !gamePaused;
+    if (gamePaused) {
+        clearInterval(objectInterval); // Stop object generation
+        clearInterval(gameTimer); // Pause the timer
+    } else {
+        startTime = Date.now() - (gameDuration - remainingTime); // Resume timer from where it left off
+        objectInterval = setInterval(spawnObject, spawnRate); // Restart object generation
+        gameTimer = setInterval(updateTimer, 1000);
+    }
+}
+
+// Timer logic
+function updateTimer() {
+    const currentTime = Date.now();
+    remainingTime = Math.max(0, gameDuration - (currentTime - startTime));
+    timerDisplay.textContent = `Time: ${Math.ceil(remainingTime / 1000)}s`;
+
+    if (remainingTime === 0) {
+        endGame();
+    }
+}
+
+function endGame() {
+    gameOver = true;
+    
+    clearInterval(gameTimer);
+    clearInterval(objectInterval);
+    
+    // Display game over message
+    ctx.clearRect(0, 0, canvasWidth, canvasHeight);
+
+    ctx.fillStyle = 'white';
+    ctx.font = '30px Arial';
+    ctx.textAlign = 'center';
+
+    ctx.fillText("Game Over!", canvasWidth / 2, canvasHeight / 2 - 30);
+    ctx.fillText("Your Score: " + score, canvasWidth / 2, canvasHeight / 2);
+    
+    // Prompt the player to refresh the window
+    ctx.fillText("Press F5 or refresh the page to play again", canvasWidth / 2, canvasHeight / 2 + 40);
+}
+
+function resetGame() {
+    score = 0;
+    gameSpeed = 1;
+    spawnRate = 1500;
+    scoreDisplay.textContent = score;
+    objects = [];
+    remainingTime = gameDuration;
+    nextObject = { x: Math.random() * (canvasWidth - 20), y: -20 };
+    playerX = canvasWidth / 2 - playerWidth / 2;
+
+    clearInterval(objectInterval);
+    objectInterval = setInterval(spawnObject, spawnRate);
+
+    setTimeout(() => {
+        startTime = Date.now();
+        objectInterval = setInterval(spawnObject, spawnRate);
+        gameTimer = setInterval(updateTimer, 1000);
+        gameOver = false;
+        gameLoop();
+    }, 1000); // Give 1 second delay before restarting
+}
+
 function spawnObject() {
     const size = 20;
-    const x = Math.random() * (canvasWidth - size);
+    const x = nextObject.x;
     objects.push({ x: x, y: 0, size: size });
+    nextObject = { x: Math.random() * (canvasWidth - size), y: -20 }; // Update next falling object
 }
 
 function update() {
-    if (gameOver) return;
+    if (gameOver || gamePaused) return;
 
     // Move player
     if (moveLeft) playerX -= playerVelocity;
@@ -83,6 +169,8 @@ function update() {
     // Increase spawn rate over time
     if (score % 5 === 0 && spawnRate > 300) {
         spawnRate -= 50;
+        clearInterval(objectInterval); // Update the spawn interval
+        objectInterval = setInterval(spawnObject, spawnRate);
     }
 }
 
@@ -98,17 +186,22 @@ function draw() {
     for (let i = 0; i < objects.length; i++) {
         ctx.fillRect(objects[i].x, objects[i].y, objects[i].size, objects[i].size);
     }
+
+    // Draw next object indicator
+    ctx.fillStyle = 'blue';
+    ctx.fillRect(nextObject.x, 0, 20, 20); // Draw a small blue block above the grid
 }
 
 function gameLoop() {
-    update();
-    draw();
+    if (!gamePaused && !gameOver) {
+        update();
+        draw();
+    }
     requestAnimationFrame(gameLoop);
 }
 
-// Spawn objects at regular intervals
-setInterval(spawnObject, spawnRate);
-
-// Start the game loop
+// Start the game loop and timers
+objectInterval = setInterval(spawnObject, spawnRate);
+gameTimer = setInterval(updateTimer, 1000);
 gameLoop();
 
